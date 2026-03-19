@@ -8,6 +8,14 @@ Backtesting 19/03/2025 - 19/03/2026
 Max IB range is set to 250
 Nb of trades 111 - Win rate 61.26% - Profitable (Profit factor 1.291)
 
+baseline_ib_1.pine
+Backtesting 19/03/2023 - 19/03/2026
+Max IB range is set to 250
+Nb of trades 354 - Win rate 62.99% - Profitable (Profit factor 1.181)
+
+
+
+
 
 baseline_ib_2.pine
 Backtesting 19/03/2025 - 19/03/2026
