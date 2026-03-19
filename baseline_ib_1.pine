@@ -1,0 +1,129 @@
+//@version=5
+strategy("Baseline IB Strategy (Clean)", overlay=true)
+
+// === SETTINGS ===
+string tz = "America/New_York"
+
+// IB: 9:30 → 10:30
+ib_start_hour = 9
+ib_start_min  = 30
+ib_end_hour   = 10
+ib_end_min    = 30
+
+force_exit_hour = 13
+
+// === TIME LOGIC ===
+h = hour(time, tz)
+m = minute(time, tz)
+
+// IB session detection
+in_ib = (h == ib_start_hour and m >= ib_start_min) or (h == ib_end_hour and m < ib_end_min)
+
+// Detect IB close (10:30 exactly → first bar AFTER IB)
+ib_closed = (h == ib_end_hour and m >= ib_end_min)
+
+// Detect new IB close event (trigger once)
+new_ib_close = ib_closed and not ib_closed[1]
+
+
+
+// New day detection
+newDay = ta.change(dayofmonth(time, tz))
+
+// === VARIABLES ===
+var float ib_high = na
+var float ib_low = na
+var float long_entry = na
+var float short_entry = na
+var float ib_close_pos = na
+var float mid = na
+var int ib_high_bar = na
+var int ib_low_bar = na
+var float ib_range = na
+var bool tradedToday = false
+
+// === RESET DAILY ===
+if newDay
+    ib_high := na
+    ib_low := na
+    ib_high_bar := na
+    ib_low_bar := na
+    ib_range := na
+    tradedToday := false
+
+// === BUILD IB RANGE ===
+if in_ib
+    if na(ib_high) or high > ib_high
+        ib_high := high
+        ib_high_bar := bar_index
+
+    if na(ib_low) or low < ib_low
+        ib_low := low
+        ib_low_bar := bar_index
+
+// === FREEZE RANGE AFTER IB CLOSE ===
+if new_ib_close and not na(ib_high) and not na(ib_low)
+    ib_range := ib_high - ib_low
+
+if new_ib_close and not na(ib_range)
+    label.new(bar_index, ib_high + 10, "IB range: " + str.tostring(ib_range), style=label.style_label_down,        color=color.blue,        textcolor=color.white    )
+
+// === STRATEGY LOGIC ===
+if new_ib_close and not tradedToday and not na(ib_range)
+
+    // Constraint
+    validRange = ib_range <= 250
+
+    // Midpoint
+    mid := (ib_high + ib_low) / 2
+
+    // Close position inside IB
+    ib_close_pos := close
+
+    // Sequence detection
+    low_first = ib_low_bar < ib_high_bar
+    high_first = ib_high_bar < ib_low_bar
+
+    // Entry levels
+    long_entry := ib_low + ib_range * 0.65
+    short_entry := ib_low + ib_range * 0.35
+
+    // Conditions
+    longCondition =
+         validRange and
+         ib_close_pos > mid and
+         low_first
+
+    shortCondition =
+         validRange and
+         ib_close_pos < mid and
+         high_first
+
+    // Ensure no breakout yet
+    notBroken = high <= ib_high and low >= ib_low
+
+    // === EXECUTION ===
+    if longCondition and notBroken
+        strategy.entry("Long", strategy.long, qty=1, limit=long_entry)
+        strategy.exit("TP/SL Long", "Long", limit=ib_high, stop=ib_low)
+        tradedToday := true
+
+    if shortCondition and notBroken
+        strategy.entry("Short", strategy.short, qty=1, limit=short_entry)
+        strategy.exit("TP/SL Short", "Short", limit=ib_low, stop=ib_high)
+        tradedToday := true
+
+// === FORCE EXIT AT 1PM NY ===
+if hour(time, tz) >= force_exit_hour
+    strategy.close_all()
+    strategy.cancel("Long")
+    strategy.cancel("Short")
+    
+
+// === PLOTS ===
+plot(ib_high, "IB High", color=color.black)
+plot(ib_low, "IB Low", color=color.black)
+plot(mid, "IB mid", color=color.black)
+plot(long_entry, "Long", color=color.white)
+plot(short_entry, "Long", color=color.white)
+plot(ib_close_pos, "ib_close_pos", color=color.green)
